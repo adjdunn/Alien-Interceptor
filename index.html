@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Alien Interceptor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        #gameContainer {
+            width: 500px;
+            height: 400px;
+            background-color: #1a1a2e;
+            margin: 0 auto;
+            position: relative;
+            overflow: hidden;
+            border-radius: 8px;
+            border: 2px solid #000;
+        }
+        #player {
+            width: 32px;
+            height: 32px;
+            background-color: #3498db;
+            position: absolute;
+            left: 40px;
+        }
+        .missile {
+            width: 8px;
+            height: 8px;
+            background-color: #f1c40f;
+            position: absolute;
+        }
+        .alien {
+            width: 64px;
+            height: 64px;
+            background-image: url("https://i.postimg.cc/JzH8gMtS/alien.png");
+            background-size: contain;
+            background-repeat: no-repeat;
+            position: absolute;
+        }
+        #score {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            color: #f1c40f;
+            font-size: 18px;
+        }
+        #instructions {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            color: white;
+            font-size: 14px;
+        }
+        #gameOver {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 500px;
+            height: 400px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+        }
+        #gameOver h2 {
+            margin-top: 150px;
+            font-size: 36px;
+            color: #e74c3c;
+        }
+        #gameOver p {
+            font-size: 24px;
+            color: #f1c40f;
+        }
+        #restartButton {
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #restartButton:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <h1>Alien Interceptor</h1>
+    <div id="gameContainer">
+        <div id="score">Score: 0</div>
+        <div id="player"></div>
+        <div id="instructions">
+            Up / Down arrow to move<br />
+            SPACE to shoot
+        </div>
+        <div id="gameOver">
+            <h2>Game Over!</h2>
+            <p id="finalScore">Score: 0</p>
+            <button id="restartButton">Play Again</button>
+        </div>
+    </div>
+    <audio id="laserSound" src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" preload="auto"></audio>
+    <script>
+        // Game elements
+        const player = document.getElementById("player");
+        const container = document.getElementById("gameContainer");
+        const scoreElement = document.getElementById("score");
+        const gameOverScreen = document.getElementById("gameOver");
+        const finalScoreElement = document.getElementById("finalScore");
+        const restartButton = document.getElementById("restartButton");
+        const laserSound = document.getElementById("laserSound");
+
+        // Game variables
+        let playerPosition = 150;
+        let score = 0;
+        let gameOver = false;
+        let aliens = [];
+        let missiles = [];
+        const keys = {};
+        let lastShotTime = 0;
+
+        // Set initial player position
+        player.style.top = playerPosition + "px";
+
+        // Event listeners
+        document.addEventListener("keydown", function(e) {
+            keys[e.key] = true;
+        });
+        document.addEventListener("keyup", function(e) {
+            keys[e.key] = false;
+        });
+        restartButton.addEventListener("click", restartGame);
+
+        // Game loop
+        const gameInterval = setInterval(gameLoop, 20);
+        const alienInterval = setInterval(spawnAlien, 2000);
+
+        function gameLoop() {
+            if (gameOver) return;
+
+            // Move player
+            if (keys["ArrowUp"]) {
+                playerPosition -= 5;
+                if (playerPosition < 0) playerPosition = 0;
+            }
+            if (keys["ArrowDown"]) {
+                playerPosition += 5;
+                if (playerPosition > 368) playerPosition = 368;
+            }
+            player.style.top = playerPosition + "px";
+
+            // Fire missile
+            if (keys[" "] && Date.now() - lastShotTime > 250) {
+                fireMissile();
+                lastShotTime = Date.now();
+            }
+
+            // Move aliens
+            for (let i = aliens.length - 1; i >= 0; i--) {
+                const alien = aliens[i];
+                alien.x -= 2;
+                alien.element.style.left = alien.x + "px";
+
+                // Check collision with player
+                if (
+                    alien.x < 40 + 32 &&
+                    alien.x + 64 > 40 &&
+                    alien.y < playerPosition + 32 &&
+                    alien.y + 64 > playerPosition
+                ) {
+                    endGame();
+                }
+
+                // End game if aliens reach left side
+                if (alien.x < 0) {
+                    endGame();
+                    return;
+                }
+            }
+
+            // Move missiles
+            for (let i = missiles.length - 1; i >= 0; i--) {
+                const missile = missiles[i];
+                missile.x += 5;
+                missile.element.style.left = missile.x + "px";
+
+                // Check collision with aliens
+                for (let j = aliens.length - 1; j >= 0; j--) {
+                    const alien = aliens[j];
+                    if (
+                        missile.x < alien.x + 64 &&
+                        missile.x + 8 > alien.x &&
+                        missile.y < alien.y + 64 &&
+                        missile.y + 8 > alien.y
+                    ) {
+                        // Remove alien and missile
+                        container.removeChild(alien.element);
+                        aliens.splice(j, 1);
+                        container.removeChild(missile.element);
+                        missiles.splice(i, 1);
+                        // Update score
+                        score += 10;
+                        scoreElement.textContent = "Score: " + score;
+                        break;
+                    }
+                }
+
+                // Remove off-screen missiles
+                if (missile.x > 500) {
+                    container.removeChild(missile.element);
+                    missiles.splice(i, 1);
+                }
+            }
+        }
+
+        function spawnAlien() {
+            if (gameOver) return;
+
+            const alien = document.createElement("div");
+            alien.className = "alien";
+            alien.x = 500;
+            alien.y = Math.random() * (400 - 64);
+            alien.style.left = alien.x + "px";
+            alien.style.top = alien.y + "px";
+            container.appendChild(alien);
+            aliens.push({ element: alien, x: alien.x, y: alien.y });
+        }
+
+        function fireMissile() {
+            // Play the sound
+            laserSound.currentTime = 0; // Reset the sound to start
+            laserSound.play();
+            
+            const missile = document.createElement("div");
+            missile.className = "missile";
+            missile.x = 56;
+            missile.y = playerPosition + 12;
+            missile.style.left = missile.x + "px";
+            missile.style.top = missile.y + "px";
+            container.appendChild(missile);
+            missiles.push({ element: missile, x: missile.x, y: missile.y });
+        }
+
+        function endGame() {
+            gameOver = true;
+            finalScoreElement.textContent = "Score: " + score;
+            gameOverScreen.style.display = "block";
+        }
+
+        function restartGame() {
+            // Remove all aliens and missiles
+            for (let i = 0; i < aliens.length; i++) {
+                container.removeChild(aliens[i].element);
+            }
+            for (let i = 0; i < missiles.length; i++) {
+                container.removeChild(missiles[i].element);
+            }
+            aliens = [];
+            missiles = [];
+            score = 0;
+            scoreElement.textContent = "Score: 0";
+            gameOver = false;
+            gameOverScreen.style.display = "none";
+            playerPosition = 150;
+            player.style.top = playerPosition + "px";
+        }
+    </script>
+</body>
+</html>
